@@ -122,18 +122,23 @@ static void osprd_process_request(osprd_info_t *d, struct request *req)
 
 	// Your code here.
     
-    eprintk("%d!!!\n",rq_data_dir(req));
+    eprintk("request type: %d\n",rq_data_dir(req));
+    eprintk("sector = %ld current_nr_sectors = %ld\n",req->sector,req->current_nr_sectors);
+    eprintk("%d\n",current_nr_sectors*SECTOR_SIZE);
     
     switch(rq_data_dir(req))
     {
         case 0: 
-            eprintk("READ\n");
-            eprintk("try to read : %s\n",d->data);
+            //eprintk("READ\n");
+            //eprintk("try to read : %s\n",d->data);
+            memcpy(req->buffer, d->data + req->sector * SECTOR_SIZE, req->current_nr_sectors *  SECTOR_SIZE);
+        
             break;
             
         case 1:
-            eprintk("WRITE\n");
-            eprintk("%s",req->buffer);
+            //eprintk("WRITE\n");
+            //eprintk("%s",req->buffer);
+            memcpy(d->data + req->sector * SECTOR_SIZE, req->buffer, req->current_nr_sectors *  SECTOR_SIZE);
             break;
         default:
             eprintk("Unknown reqest type\n");
