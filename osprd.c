@@ -34,7 +34,7 @@
 MODULE_LICENSE("Dual BSD/GPL");
 MODULE_DESCRIPTION("CS 111 RAM Disk");
 // EXERCISE: Pass your names into the kernel as the module's authors.
-MODULE_AUTHOR("Skeletor");
+MODULE_AUTHOR("Minhan Xia && Zhiyang Wang");
 
 #define OSPRD_MAJOR	222
 
@@ -122,7 +122,25 @@ static void osprd_process_request(osprd_info_t *d, struct request *req)
 	// 'req->buffer' members, and the rq_data_dir() function.
 
 	// Your code here.
-	eprintk("Should process request...\n");
+    
+    eprintk("%d!!!\n",rq_data_dir(req));
+    
+    switch(rq_data_dir(req))
+    {
+        case 0: 
+            eprintk("READ\n");
+            eprintk("try to read : %s\n",d->data);
+            break;
+            
+        case 1:
+            eprintk("WRITE\n");
+            eprintk("%s",req->buffer);
+            break;
+        default:
+            eprintk("Unknown reqest type\n");
+            break;
+    }
+    
 
 	end_request(req, 1);
 }
@@ -264,8 +282,7 @@ static void osprd_setup(osprd_info_t *d)
 	/* Initialize the wait queue. */
 	init_waitqueue_head(&d->blockq);
 	osp_spin_lock_init(&d->mutex);
-	d->ticket_head = 0;
-	d->ticket_tail = 0;
+	d->ticket_head = d->ticket_tail = 0;
 	/* Add code here if you add fields to osprd_info_t. */
 }
 
