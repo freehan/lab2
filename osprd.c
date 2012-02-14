@@ -112,7 +112,6 @@ static void osprd_process_request(osprd_info_t *d, struct request *req)
 		return;
 	}
 	
-	printk("the request type is %d\n",req->cmd);
 	// EXERCISE: Perform the read or write request by copying data between
 	// our data array and the request's buffer.
 	// Hint: The 'struct request' argument tells you what kind of request
@@ -123,8 +122,13 @@ static void osprd_process_request(osprd_info_t *d, struct request *req)
 
 	// Your code here.
     
-    eprintk("%d!!!\n",rq_data_dir(req));
-    
+    //eprintk("%d!!!\n",rq_data_dir(req));
+	//eprintk("what the fuck\n");
+		sector_t sector;
+		unsigned long nr_sectors;
+		//memcpy(&sector,&req->sector,sizeof(sector_t));
+    	//memcpy(&nr_sectors,&req->current_nr_sectors,sizeof(unsigned long));
+		eprintk("sector is %ld, nr is %ld\n", req->sector, req->current_nr_sectors);
     switch(rq_data_dir(req))
     {
         case 0: 
@@ -134,7 +138,7 @@ static void osprd_process_request(osprd_info_t *d, struct request *req)
             
         case 1:
             eprintk("WRITE\n");
-            eprintk("%s",req->buffer);
+            eprintk("%s\n",req->buffer);
             break;
         default:
             eprintk("Unknown reqest type\n");

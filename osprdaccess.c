@@ -76,9 +76,14 @@ void sleep_for(double seconds)
 
 void transfer(int fd1, int fd2, ssize_t size)
 {
+	printf("transfer, size is %ld\n",size);
+	printf("BUFSIZ is %ld",BUFSIZ);
 	char buf[BUFSIZ], *bufptr;
 
 	while (size != 0) {
+		//read from fd1 to buf
+		//for read command, read device info into buf
+		//for write command, read stdin into buf
 		ssize_t r = read(fd1, buf, (size > 0 && size < BUFSIZ ? size : BUFSIZ));
 		if (r < 0 && (errno == EAGAIN || errno == EINTR))
 			continue;
@@ -90,6 +95,7 @@ void transfer(int fd1, int fd2, ssize_t size)
 		else
 			size -= r;
 
+		printf("read finished\n");
 		bufptr = buf;
 		while (r > 0) {
 			ssize_t w = write(fd2, bufptr, r);
@@ -103,9 +109,11 @@ void transfer(int fd1, int fd2, ssize_t size)
 			} else
 				bufptr += w, r -= w;
 		}
+		printf("write finished\n");
 	}
 }
 
+//write all zero into fd2
 void transfer_zero(int fd2, ssize_t size)
 {
 	char buf[BUFSIZ];
