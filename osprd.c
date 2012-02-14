@@ -276,7 +276,8 @@ static void osprd_setup(osprd_info_t *d)
 
 // Process a list of requests for a osprd_info_t.
 // Calls osprd_process_request for each element of the queue.
-static void osprd_process_request_queue(request_queue_t* q)
+
+static void osprd_process_request_queue(request_queue_t *q)
 {
 	osprd_info_t *d = (osprd_info_t *) q->queuedata;
 	struct request *req;
