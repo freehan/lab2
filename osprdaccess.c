@@ -76,8 +76,6 @@ void sleep_for(double seconds)
 
 void transfer(int fd1, int fd2, ssize_t size)
 {
-	printf("transfer, size is %ld\n",size);
-	printf("BUFSIZ is %ld",BUFSIZ);
 	char buf[BUFSIZ], *bufptr;
 
 	while (size != 0) {
@@ -95,7 +93,6 @@ void transfer(int fd1, int fd2, ssize_t size)
 		else
 			size -= r;
 
-		printf("read finished\n");
 		bufptr = buf;
 		while (r > 0) {
 			ssize_t w = write(fd2, bufptr, r);
@@ -109,7 +106,6 @@ void transfer(int fd1, int fd2, ssize_t size)
 			} else
 				bufptr += w, r -= w;
 		}
-		printf("write finished\n");
 	}
 }
 

@@ -51,13 +51,14 @@ typedef struct osprd_info {
 	                                // (nsectors * SECTOR_SIZE) bytes.
 
 	osp_spinlock_t mutex;           // Mutex for synchronizing access to
+	int readCount;
 					// this block device
 
 	unsigned ticket_head;		// Currently running ticket for
 					// the device lock
 
 	unsigned ticket_tail;		// Next available ticket for
-					// the device lock
+							// the device lock
 
 	wait_queue_head_t blockq;       // Wait queue for tasks blocked on
 					// the device lock
@@ -122,23 +123,22 @@ static void osprd_process_request(osprd_info_t *d, struct request *req)
 
 	// Your code here.
     
-    //eprintk("%d!!!\n",rq_data_dir(req));
-	//eprintk("what the fuck\n");
-		sector_t sector;
-		unsigned long nr_sectors;
-		//memcpy(&sector,&req->sector,sizeof(sector_t));
-    	//memcpy(&nr_sectors,&req->current_nr_sectors,sizeof(unsigned long));
-		eprintk("sector is %ld, nr is %ld\n", req->sector, req->current_nr_sectors);
+    //eprintk("request type: %d\n",rq_data_dir(req));
+    eprintk("sector = %d current_nr_sectors = %d\n",req->sector,req->current_nr_sectors);
+    
     switch(rq_data_dir(req))
     {
         case 0: 
-            eprintk("READ\n");
-            eprintk("try to read : %s\n",d->data);
+            //eprintk("READ\n");
+            //eprintk("try to read : %s\n",d->data);
+            memcpy(req->buffer, d->data + req->sector * SECTOR_SIZE, req->current_nr_sectors *  SECTOR_SIZE);
+        
             break;
             
         case 1:
-            eprintk("WRITE\n");
-            eprintk("%s\n",req->buffer);
+            //eprintk("WRITE\n");
+            //eprintk("%s",req->buffer);
+            memcpy(d->data + req->sector * SECTOR_SIZE, req->buffer, req->current_nr_sectors *  SECTOR_SIZE);
             break;
         default:
             eprintk("Unknown reqest type\n");
@@ -245,6 +245,16 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		// be protected by a spinlock; which ones?)
 
 		// Your code here (instead of the next two lines).
+		if(filp_writable){ //acqurie write lock
+			while(true){
+				osp_spin_lock(d->mutex);
+				blockq[ticket_tail] =  
+				ticket_tail++;
+				filp->f_flags |= F_OSPRD_LOCKED
+			}	
+		}
+		else{	//acquire write lock 
+		}
 		eprintk("Attempting to acquire\n");
 		r = -ENOTTY;
 
