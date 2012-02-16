@@ -79,6 +79,9 @@ void transfer(int fd1, int fd2, ssize_t size)
 	char buf[BUFSIZ], *bufptr;
 
 	while (size != 0) {
+		//read from fd1 to buf
+		//for read command, read device info into buf
+		//for write command, read stdin into buf
 		ssize_t r = read(fd1, buf, (size > 0 && size < BUFSIZ ? size : BUFSIZ));
 		if (r < 0 && (errno == EAGAIN || errno == EINTR))
 			continue;
@@ -106,6 +109,7 @@ void transfer(int fd1, int fd2, ssize_t size)
 	}
 }
 
+//write all zero into fd2
 void transfer_zero(int fd2, ssize_t size)
 {
 	char buf[BUFSIZ];
@@ -130,7 +134,7 @@ int main(int argc, char *argv[])
 	char *newarg;
 	int devfd, ofd;
 	int i, r, timeout = 0, zero = 0;
-	int mode = O_RDONLY, dolock = 0, dotrylock = 0;
+	int mode = O_RDONLY, dolock = 0, dotrylock = 0, unlock = 0;
 	ssize_t size = -1;
 	ssize_t offset = 0;
 	double delay = 0;
@@ -165,8 +169,19 @@ int main(int argc, char *argv[])
 	if (argc >= 2 && strcmp(argv[1], "-l") == 0) {
 		dolock = 1;
 		dotrylock = 0;
+		unlock = 0;
 		argv++, argc--;
 		if (argc >= 2 && parse_double(argv[1], &lock_delay))
+			argv++, argc--;
+		goto flag;
+	}
+
+	if (argc >= 2 && strcmp(argv[1], "-u") == 0){
+		unlock = 1;
+		dolock = 0;
+		dotrylock = 0;
+		argv++, argc--;
+		if(argc >= 2 && parse_double(argv[1], & lock_delay))
 			argv++, argc--;
 		goto flag;
 	}
@@ -175,6 +190,7 @@ int main(int argc, char *argv[])
 	if (argc >= 2 && strcmp(argv[1], "-L") == 0) {
 		dotrylock = 1;
 		dolock = 0;
+		unlock = 0;
 		argv++, argc--;
 		if (argc >= 2 && parse_double(argv[1], &lock_delay))
 			argv++, argc--;
@@ -214,14 +230,18 @@ int main(int argc, char *argv[])
 	}
 
 	// Lock, possibly after delay
-	if (dolock || dotrylock) {
+	if (dolock || dotrylock || unlock) {
 		if (lock_delay >= 0)
 			sleep_for(lock_delay);
 		if (dolock
 		    && ioctl(devfd, OSPRDIOCACQUIRE, NULL) == -1) {
 			perror("ioctl OSPRDIOCACQUIRE");
 			exit(1);
-		} else if (dotrylock
+		} else if (unlock && ioctl(devfd, OSPRDIOCRELEASE, NULL) ==-1){
+			perror("ioctl OSPRDIOCRELEASE\n");
+			exit(1);
+		} 
+		else if (dotrylock
 			   && ioctl(devfd, OSPRDIOCTRYACQUIRE, NULL) == -1) {
 			perror("ioctl OSPRDIOCTRYACQUIRE");
 			exit(1);

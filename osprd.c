@@ -53,13 +53,14 @@ typedef struct osprd_info {
 	                                // (nsectors * SECTOR_SIZE) bytes.
 
 	osp_spinlock_t mutex;           // Mutex for synchronizing access to
+	int reader;
 					// this block device
 
 	unsigned ticket_head;		// Currently running ticket for
 					// the device lock
 
 	unsigned ticket_tail;		// Next available ticket for
-					// the device lock
+							// the device lock
 
 	wait_queue_head_t blockq;       // Wait queue for tasks blocked on
 					// the device lock
@@ -116,7 +117,7 @@ static void osprd_process_request(osprd_info_t *d, struct request *req)
 		end_request(req, 0);
 		return;
 	}
-
+	
 	// EXERCISE: Perform the read or write request by copying data between
 	// our data array and the request's buffer.
 	// Hint: The 'struct request' argument tells you what kind of request
@@ -126,11 +127,12 @@ static void osprd_process_request(osprd_info_t *d, struct request *req)
 	// 'req->buffer' members, and the rq_data_dir() function.
 
 	// Your code here.
-    
-    //eprintk("request type: %d\n",rq_data_dir(req));
-    //eprintk("sector = %ld current_nr_sectors = %ld\n",req->sector,req->current_nr_sectors);
-    //eprintk("%d\n",current_nr_sectors*SECTOR_SIZE);
-    
+    /*
+    eprintk("request type: %d\n",rq_data_dir(req));
+    eprintk("sector = %d current_nr_sectors = %d\n",req->sector,req->current_nr_sectors);
+    int pid_n = current->pid;
+	eprintk("pid is %d\n",pid_n); 
+    */
     switch(rq_data_dir(req))
     {
         case 0: 
@@ -311,6 +313,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		eprintk("Attempting to acquire\n");
 		r = -ENOTTY;
         */
+
 	} else if (cmd == OSPRDIOCTRYACQUIRE) {
 
 		// EXERCISE: ATTEMPT to lock the ramdisk.
@@ -372,6 +375,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		// you need, and return 0.
         
 		// Your code here (instead of the next line).
+
 		//r = -ENOTTY;
         
         
@@ -395,7 +399,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
         wake_up_all(&d->blockq); //Wake up request that holds the next ticket
         osp_spin_unlock(&d->mutex);
         r = 0;
-
+        
 	} else
 		r = -ENOTTY; /* unknown command */
 	return r;
@@ -411,6 +415,7 @@ static void osprd_setup(osprd_info_t *d)
 	osp_spin_lock_init(&d->mutex);
 	d->ticket_head = d->ticket_tail = 0;
 	/* Add code here if you add fields to osprd_info_t. */
+
     d->read_count = 0;        
     d->write_count = 0;       //initialize the counter
 }
