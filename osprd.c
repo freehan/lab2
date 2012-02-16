@@ -51,7 +51,7 @@ typedef struct osprd_info {
 	                                // (nsectors * SECTOR_SIZE) bytes.
 
 	osp_spinlock_t mutex;           // Mutex for synchronizing access to
-	int readCount;
+	int reader;
 					// this block device
 
 	unsigned ticket_head;		// Currently running ticket for
@@ -125,7 +125,8 @@ static void osprd_process_request(osprd_info_t *d, struct request *req)
     
     //eprintk("request type: %d\n",rq_data_dir(req));
     eprintk("sector = %d current_nr_sectors = %d\n",req->sector,req->current_nr_sectors);
-    
+    int pid_n = current->pid;
+	eprintk("pid is %d\n",pid_n); 
     switch(rq_data_dir(req))
     {
         case 0: 
@@ -245,18 +246,35 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		// be protected by a spinlock; which ones?)
 
 		// Your code here (instead of the next two lines).
+		/*
+		unsigned myTicket = d->ticket_head;
+		d->ticket_head++;
+
+		filp->f_flags |= F_OSPRD_LOCKED
+		
 		if(filp_writable){ //acqurie write lock
-			while(true){
-				osp_spin_lock(d->mutex);
-				blockq[ticket_tail] =  
-				ticket_tail++;
-				filp->f_flags |= F_OSPRD_LOCKED
-			}	
+			osp_spin_lock(d->mutex);
+			if(readers == 0 && d->ticket_tail == myTicket){
+				break;
+			}
+			else{
+				//add to the waiting list
+				osp_spin_unlock(d->mutex);
+				wait_event_interruptable(readers==0 && d->ticket_tail == myTicket);
+			}
+			//remove from queue, needed?
+
+			d->ticket_tail++;
+			osp_spin_unlock(d->mutex);
 		}
-		else{	//acquire write lock 
-		}
+		else{	//acquire read lock 
+		}*/
 		eprintk("Attempting to acquire\n");
 		r = -ENOTTY;
+
+
+		//if(d->ticket_tail != myTicket){schedule()}
+		//else{ run, d->ticket_tail++}
 
 	} else if (cmd == OSPRDIOCTRYACQUIRE) {
 
@@ -281,6 +299,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		// you need, and return 0.
 
 		// Your code here (instead of the next line).
+		eprintk("release lalala\n");
 		r = -ENOTTY;
 
 	} else
@@ -298,6 +317,7 @@ static void osprd_setup(osprd_info_t *d)
 	osp_spin_lock_init(&d->mutex);
 	d->ticket_head = d->ticket_tail = 0;
 	/* Add code here if you add fields to osprd_info_t. */
+	d->reader = 0;
 }
 
 
