@@ -24,6 +24,8 @@
  * is locked. */
 #define F_OSPRD_LOCKED	0x80000
 
+#define DEBUG
+
 /* eprintk() prints messages to the console.
  * (If working on a real Linux machine, change KERN_NOTICE to KERN_ALERT or
  * KERN_EMERG so that you are sure to see the messages.  By default, the
@@ -64,6 +66,9 @@ typedef struct osprd_info {
 
 	/* HINT: You may want to add additional fields to help
 	         in detecting deadlock. */
+    
+    unsigned read_count;        //count the process that is currently reading the file
+    unsigned write_count;       //count the process that is currently writing the file
 
 	// The following elements are used internally; you don't need
 	// to understand them.
@@ -122,9 +127,9 @@ static void osprd_process_request(osprd_info_t *d, struct request *req)
 
 	// Your code here.
     
-    eprintk("request type: %d\n",rq_data_dir(req));
-    eprintk("sector = %ld current_nr_sectors = %ld\n",req->sector,req->current_nr_sectors);
-    eprintk("%d\n",current_nr_sectors*SECTOR_SIZE);
+    //eprintk("request type: %d\n",rq_data_dir(req));
+    //eprintk("sector = %ld current_nr_sectors = %ld\n",req->sector,req->current_nr_sectors);
+    //eprintk("%d\n",current_nr_sectors*SECTOR_SIZE);
     
     switch(rq_data_dir(req))
     {
@@ -175,6 +180,11 @@ static int osprd_close_last(struct inode *inode, struct file *filp)
 		// as appropriate.
 
 		// Your code here.
+        
+        if(filp_writable)
+            d->write_count--;
+        else
+            d->read_count--;
 
 		// This line avoids compiler warnings; you may remove it.
 		(void) filp_writable, (void) d;
@@ -188,6 +198,21 @@ static int osprd_close_last(struct inode *inode, struct file *filp)
 /*
  * osprd_lock
  */
+int write_condition(osprd_info_t *d)
+{
+    if(d->read_count != 0 || d->write_count != 0)
+        return 0;
+    else
+        return 1;
+}
+
+int read_condition(osprd_info_t *d)
+{
+    if(d->write_count != 0)
+        return 0;
+    else
+        return 1;
+}
 
 /*
  * osprd_ioctl(inode, filp, cmd, arg)
@@ -206,7 +231,9 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 	(void) filp_writable, (void) d;
 
 	// Set 'r' to the ioctl's return value: 0 on success, negative on error
-
+    
+    
+    
 	if (cmd == OSPRDIOCACQUIRE) {
 
 		// EXERCISE: Lock the ramdisk.
@@ -245,9 +272,45 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		// be protected by a spinlock; which ones?)
 
 		// Your code here (instead of the next two lines).
+        
+        int my_ticket = 0;              ///keep track of my ticket
+        
+        osp_spin_lock(&d->mutex);
+        my_ticket = d->ticket_head++;
+        osp_spin_unlock(&d->mutex);
+        
+#ifdef DEBUG
+        eprintk("Handling ACQUIRE, my_ticket is %d\n",my_ticket);
+#endif
+        if(filp_writable)
+        {
+            wait_event_interruptible(d->blockq, d->write_count == 0 && d->read_count == 0 && d->ticket_tail >= my_ticket);
+            
+            osp_spin_lock(&d->mutex);
+            d->write_count++;
+            d->ticket_tail++;
+            filp->f_flags |= F_OSPRD_LOCKED;
+            osp_spin_unlock(&d->mutex);
+            
+        }
+        else
+        {
+            wait_event_interruptible(d->blockq, d->write_count == 0 && d->ticket_tail >= my_ticket);
+            
+            osp_spin_lock(&d->mutex);
+            d->ticket_tail++;
+            d->read_count++;
+            filp->f_flags |= F_OSPRD_LOCKED;
+            osp_spin_unlock(&d->mutex);
+        }     
+
+        r=0;
+        
+        
+        /*
 		eprintk("Attempting to acquire\n");
 		r = -ENOTTY;
-
+        */
 	} else if (cmd == OSPRDIOCTRYACQUIRE) {
 
 		// EXERCISE: ATTEMPT to lock the ramdisk.
@@ -258,20 +321,80 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		// Otherwise, if we can grant the lock request, return 0.
 
 		// Your code here (instead of the next two lines).
+        
+#ifdef DEBUG
+        eprintk("Handling TRY ACQUIRE\n");
+#endif
+        
+        if(filp_writable)
+        {
+            osp_spin_lock(&d->mutex);
+            if(write_condition(d))
+            {
+                d->write_count++;
+                filp->f_flags |= F_OSPRD_LOCKED;
+                osp_spin_unlock(&d->mutex);
+            }
+            else
+            {
+                osp_spin_unlock(&d->mutex);
+                return -EBUSY;
+            }
+        }
+        else
+        {
+            osp_spin_lock(&d->mutex);
+            if(read_condition(d))
+            {
+                d->read_count++;
+                filp->f_flags |= F_OSPRD_LOCKED;
+                osp_spin_unlock(&d->mutex);
+            }
+            else
+            {
+                osp_spin_unlock(&d->mutex);
+                return -EBUSY;
+            }
+
+        }
+        r = 0;
+        
+        /*
 		eprintk("Attempting to try acquire\n");
 		r = -ENOTTY;
-
+        */
 	} else if (cmd == OSPRDIOCRELEASE) {
-
 		// EXERCISE: Unlock the ramdisk.
 		//
 		// If the file hasn't locked the ramdisk, return -EINVAL.
 		// Otherwise, clear the lock from filp->f_flags, wake up
 		// the wait queue, perform any additional accounting steps
 		// you need, and return 0.
-
+        
 		// Your code here (instead of the next line).
-		r = -ENOTTY;
+		//r = -ENOTTY;
+        
+        
+#ifdef DEBUG
+        eprintk("Handling RELEASE\n");
+#endif
+        
+        if(filp->f_flags != F_OSPRD_LOCKED)
+            return -EINVAL; //No lock on the ramdisk
+        
+        osp_spin_lock(&d->mutex);
+        filp->f_flags = 0;          //reset the flag?
+        if(filp_writable)
+        {
+            d->write_count--;
+        }
+        else
+        {
+            d->read_count--;
+        }
+        wake_up_all(&d->blockq); //Wake up request that holds the next ticket
+        osp_spin_unlock(&d->mutex);
+        r = 0;
 
 	} else
 		r = -ENOTTY; /* unknown command */
@@ -288,6 +411,8 @@ static void osprd_setup(osprd_info_t *d)
 	osp_spin_lock_init(&d->mutex);
 	d->ticket_head = d->ticket_tail = 0;
 	/* Add code here if you add fields to osprd_info_t. */
+    d->read_count = 0;        
+    d->write_count = 0;       //initialize the counter
 }
 
 
