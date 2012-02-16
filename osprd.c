@@ -24,7 +24,7 @@
  * is locked. */
 #define F_OSPRD_LOCKED	0x80000
 
-#define DEBUG
+//#define DEBUG
 
 /* eprintk() prints messages to the console.
  * (If working on a real Linux machine, change KERN_NOTICE to KERN_ALERT or
@@ -183,10 +183,16 @@ static int osprd_close_last(struct inode *inode, struct file *filp)
 
 		// Your code here.
         
-        if(filp_writable)
-            d->write_count--;
-        else
-            d->read_count--;
+        if(filp->f_flags & F_OSPRD_LOCKED) {
+            osp_spin_lock(&d->mutex);
+            filp->f_flags &= ~F_OSPRD_LOCKED;
+            if(filp_writable)
+                d->write_count--;
+            else
+                d->read_count--;
+            osp_spin_unlock(&d->mutex);
+            wake_up_all(&d->blockq); //Wake up request that holds the next ticket
+        }
 
 		// This line avoids compiler warnings; you may remove it.
 		(void) filp_writable, (void) d;
