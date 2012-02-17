@@ -9,14 +9,21 @@
 # the end of the file.
 
 # Partner 1
-Name: Your Name Here
-Student ID: Your ID Here
-Email: Your Email Here
+Name: Minhan Xia
+Student ID: 204000665
+Email: Minhan.Xia@gmail.com
 
 # Partner 2
-#Name: Partner's Name Here
-#Student ID: Partner's ID Here
-#Email: Partner's Email Here
+#Name: Zhiyang Wang
+#Student ID: 303991529
+#Email: seanwangsk@gmail.com
 
 
 # Add any other information you'd like us to have below this line.
+In our design, we add two features. 
+
+1. Deadlock Detection
+In our design, if a process wants to acquire a lock that it already have. Then this request will be rejected.
+
+2. Illegal Lock Release Detection
+This feature guarantees that a process could not release a lock that it does not own.

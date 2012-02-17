@@ -221,6 +221,8 @@ int main(int argc, char *argv[])
 		devname = argv[1];
 		argv++, argc--;
 	}
+    
+    //printf("device name:%s\n",devname);
 
 	// Open ramdisk file
 	devfd = open(devname, mode);

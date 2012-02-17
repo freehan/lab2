@@ -46,6 +46,7 @@ MODULE_AUTHOR("Minhan Xia && Zhiyang Wang");
 static int nsectors = 32;
 module_param(nsectors, int, 0);
 
+#define MAX_MEM_SIZE 128
 
 /* The internal representation of our device. */
 typedef struct osprd_info {
@@ -70,7 +71,9 @@ typedef struct osprd_info {
     
     unsigned read_count;        //count the process that is currently reading the file
     unsigned write_count;       //count the process that is currently writing the file
-
+    
+    pid_t pid_tracker[MAX_MEM_SIZE];//track the pid of incoming process
+    
 	// The following elements are used internally; you don't need
 	// to understand them.
 	struct request_queue *queue;    // The device request queue.
@@ -148,7 +151,8 @@ static void osprd_process_request(osprd_info_t *d, struct request *req)
             memcpy(d->data + req->sector * SECTOR_SIZE, req->buffer, req->current_nr_sectors *  SECTOR_SIZE);
             break;
         default:
-            eprintk("Unknown reqest type\n");
+            eprintk("Unknown request type\n");
+            end_request(req, 0);
             break;
     }
     
@@ -282,14 +286,35 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		// Your code here (instead of the next two lines).
         
         int my_ticket = 0;              ///keep track of my ticket
-        
         osp_spin_lock(&d->mutex);
         my_ticket = d->ticket_head++;
         osp_spin_unlock(&d->mutex);
         
+        d->pid_tracker[my_ticket%MAX_MEM_SIZE] = current->pid;
+        
 #ifdef DEBUG
         eprintk("Handling ACQUIRE, my_ticket is %d\n",my_ticket);
+        eprintk("Current pid is :%d\n", current->pid);
 #endif
+        
+        //check self deadlock
+        osp_spin_lock(&d->mutex);
+        int run_count = d->read_count + d->write_count;
+        int index = (d->ticket_tail - 1)%MAX_MEM_SIZE;
+        osp_spin_unlock(&d->mutex);
+        while(run_count > 0)
+        {
+            if(d->pid_tracker[index] == current->pid)
+                return -EDEADLK;
+            index--;
+            if(index<0)
+                index = MAX_MEM_SIZE - 1;
+            run_count--;
+        }
+        //check loop deadlock
+        
+        
+        
         if(filp_writable)
         {
             wait_event_interruptible(d->blockq, d->write_count == 0 && d->read_count == 0 && d->ticket_tail >= my_ticket);
@@ -391,6 +416,29 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
         
         if(filp->f_flags != F_OSPRD_LOCKED)
             return -EINVAL; //No lock on the ramdisk
+        
+        //check whether current process owns a lock
+        osp_spin_lock(&d->mutex);
+        int showup = 0;
+        int run_count = d->read_count + d->write_count;
+        int index = (d->ticket_tail - 1)%MAX_MEM_SIZE;
+        osp_spin_unlock(&d->mutex);
+        while(run_count > 0)
+        {
+            if(d->pid_tracker[index] == current->pid)
+            {
+                showup = 1;
+                break;
+            }
+            index--;
+            if(index<0)
+                index = MAX_MEM_SIZE - 1;
+            run_count--;
+        }
+        
+        if(showup == 0)
+            return -EINVAL;//current process don't own the lock
+        
         
         osp_spin_lock(&d->mutex);
         filp->f_flags = 0;          //reset the flag?
